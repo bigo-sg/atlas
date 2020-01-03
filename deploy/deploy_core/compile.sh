@@ -4,3 +4,4 @@ cd ../../
 mvn clean package \
 -DskipTests \
 -Pdist
+-Drat.numUnapprovedLicenses=100
