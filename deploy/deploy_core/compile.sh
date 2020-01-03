@@ -3,5 +3,5 @@ echo "compiling project bigo-atlas 2.0"
 cd ../../
 mvn clean package \
 -DskipTests \
--Pdist
+-Pdist \
 -Drat.numUnapprovedLicenses=100
