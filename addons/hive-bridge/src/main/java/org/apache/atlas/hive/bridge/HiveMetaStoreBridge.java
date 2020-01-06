@@ -574,11 +574,14 @@ public class HiveMetaStoreBridge {
 
     public static String getDatabaseName(Database hiveDB) {
         String dbName      = hiveDB.getName().toLowerCase();
+
+        /* hive2.3.2 has no this method: getCatalogName()
         String catalogName = hiveDB.getCatalogName() != null ? hiveDB.getCatalogName().toLowerCase() : null;
 
         if (StringUtils.isNotEmpty(catalogName) && !StringUtils.equals(catalogName, DEFAULT_METASTORE_CATALOG)) {
             dbName = catalogName + SEP + dbName;
         }
+        */
 
         return dbName;
     }
