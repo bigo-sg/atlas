@@ -350,41 +350,39 @@ public class HiveMetaStoreBridge {
             Table                  table       = hiveClient.getTable(databaseName, tableName);
             AtlasEntityWithExtInfo tableEntity = registerTable(dbEntity, table);
 
-            if (table.getTableType() == TableType.EXTERNAL_TABLE) {
-                String                 processQualifiedName = getTableProcessQualifiedName(metadataNamespace, table);
-                AtlasEntityWithExtInfo processEntity        = findProcessEntity(processQualifiedName);
+            String                 processQualifiedName = getTableProcessQualifiedName(metadataNamespace, table);
+            AtlasEntityWithExtInfo processEntity        = findProcessEntity(processQualifiedName);
 
-                if (processEntity == null) {
-                    String      tableLocation = isConvertHdfsPathToLowerCase() ? lower(table.getDataLocation().toString()) : table.getDataLocation().toString();
-                    String      query         = getCreateTableString(table, tableLocation);
-                    AtlasEntity pathInst      = toHdfsPathEntity(tableLocation);
-                    AtlasEntity tableInst     = tableEntity.getEntity();
-                    AtlasEntity processInst   = new AtlasEntity(HiveDataTypes.HIVE_PROCESS.getName());
-                    long        now           = System.currentTimeMillis();
+            if (processEntity == null) {
+                String      tableLocation = isConvertHdfsPathToLowerCase() ? lower(table.getDataLocation().toString()) : table.getDataLocation().toString();
+                String      query         = getCreateTableString(table, tableLocation, table.getTableType());
+                AtlasEntity pathInst      = toHdfsPathEntity(tableLocation);
+                AtlasEntity tableInst     = tableEntity.getEntity();
+                AtlasEntity processInst   = new AtlasEntity(HiveDataTypes.HIVE_PROCESS.getName());
+                long        now           = System.currentTimeMillis();
 
-                    processInst.setAttribute(ATTRIBUTE_QUALIFIED_NAME, processQualifiedName);
-                    processInst.setAttribute(ATTRIBUTE_NAME, query);
-                    processInst.setAttribute(ATTRIBUTE_CLUSTER_NAME, metadataNamespace);
-                    processInst.setRelationshipAttribute(ATTRIBUTE_INPUTS, Collections.singletonList(AtlasTypeUtil.getAtlasRelatedObjectId(pathInst, RELATIONSHIP_DATASET_PROCESS_INPUTS)));
-                    processInst.setRelationshipAttribute(ATTRIBUTE_OUTPUTS, Collections.singletonList(AtlasTypeUtil.getAtlasRelatedObjectId(tableInst, RELATIONSHIP_PROCESS_DATASET_OUTPUTS)));
-                    processInst.setAttribute(ATTRIBUTE_USER_NAME, table.getOwner());
-                    processInst.setAttribute(ATTRIBUTE_START_TIME, now);
-                    processInst.setAttribute(ATTRIBUTE_END_TIME, now);
-                    processInst.setAttribute(ATTRIBUTE_OPERATION_TYPE, "CREATETABLE");
-                    processInst.setAttribute(ATTRIBUTE_QUERY_TEXT, query);
-                    processInst.setAttribute(ATTRIBUTE_QUERY_ID, query);
-                    processInst.setAttribute(ATTRIBUTE_QUERY_PLAN, "{}");
-                    processInst.setAttribute(ATTRIBUTE_RECENT_QUERIES, Collections.singletonList(query));
+                processInst.setAttribute(ATTRIBUTE_QUALIFIED_NAME, processQualifiedName);
+                processInst.setAttribute(ATTRIBUTE_NAME, query);
+                processInst.setAttribute(ATTRIBUTE_CLUSTER_NAME, metadataNamespace);
+                processInst.setRelationshipAttribute(ATTRIBUTE_INPUTS, Collections.singletonList(AtlasTypeUtil.getAtlasRelatedObjectId(pathInst, RELATIONSHIP_DATASET_PROCESS_INPUTS)));
+                processInst.setRelationshipAttribute(ATTRIBUTE_OUTPUTS, Collections.singletonList(AtlasTypeUtil.getAtlasRelatedObjectId(tableInst, RELATIONSHIP_PROCESS_DATASET_OUTPUTS)));
+                processInst.setAttribute(ATTRIBUTE_USER_NAME, table.getOwner());
+                processInst.setAttribute(ATTRIBUTE_START_TIME, now);
+                processInst.setAttribute(ATTRIBUTE_END_TIME, now);
+                processInst.setAttribute(ATTRIBUTE_OPERATION_TYPE, "CREATETABLE");
+                processInst.setAttribute(ATTRIBUTE_QUERY_TEXT, query);
+                processInst.setAttribute(ATTRIBUTE_QUERY_ID, query);
+                processInst.setAttribute(ATTRIBUTE_QUERY_PLAN, "{}");
+                processInst.setAttribute(ATTRIBUTE_RECENT_QUERIES, Collections.singletonList(query));
 
-                    AtlasEntitiesWithExtInfo createTableProcess = new AtlasEntitiesWithExtInfo();
+                AtlasEntitiesWithExtInfo createTableProcess = new AtlasEntitiesWithExtInfo();
 
-                    createTableProcess.addEntity(processInst);
-                    createTableProcess.addEntity(pathInst);
+                createTableProcess.addEntity(processInst);
+                createTableProcess.addEntity(pathInst);
 
-                    registerInstances(createTableProcess);
-                } else {
-                    LOG.info("Process {} is already registered", processQualifiedName);
-                }
+                registerInstances(createTableProcess);
+            } else {
+                LOG.info("Process {} is already registered", processQualifiedName);
             }
 
             return 1;
@@ -820,7 +818,7 @@ public class HiveMetaStoreBridge {
         return ret;
     }
 
-    private String getCreateTableString(Table table, String location){
+    private String getCreateTableString(Table table, String location, TableType tableType){
         String            colString = "";
         List<FieldSchema> colList   = table.getAllCols();
 
@@ -835,9 +833,15 @@ public class HiveMetaStoreBridge {
             }
         }
 
-        String query = "create external table " + table.getTableName() +  colString + " location '" + location + "'";
+        StringBuffer query = new StringBuffer();
+        if (table.getTableType() == TableType.EXTERNAL_TABLE) {
+            query.append("create external table ");
+        } else {
+            query.append("create table ");
+        }
+        query.append(table.getTableName()).append(colString).append(" location '").append(location).append("'");
 
-        return query;
+        return query.toString();
     }
 
     private String lower(String str) {

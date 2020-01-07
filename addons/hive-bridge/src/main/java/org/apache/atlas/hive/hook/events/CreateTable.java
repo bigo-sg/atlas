@@ -150,29 +150,25 @@ public class CreateTable extends BaseHiveEvent {
                     if (context.isMetastoreHook()) {
                         //it is running in the context of HiveMetastore
                         //not a hive metastore hook
-                        if (isCreateExtTableOperation(table)) {
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("Creating a dummy process with lineage from hdfs path to hive table");
-                            }
-                            AtlasEntity hdfsPathEntity = getPathEntity(table.getDataLocation(), ret);
-                            AtlasEntity processEntity  = getHiveProcessEntity(Collections.singletonList(hdfsPathEntity), Collections.singletonList(tblEntity));
-
-                            ret.addEntity(processEntity);
-                            ret.addReferredEntity(hdfsPathEntity);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Creating a dummy process with lineage from hdfs path to hive table");
                         }
+                        AtlasEntity hdfsPathEntity = getPathEntity(table.getDataLocation(), ret);
+                        AtlasEntity processEntity  = getHiveProcessEntity(Collections.singletonList(hdfsPathEntity), Collections.singletonList(tblEntity));
+
+                        ret.addEntity(processEntity);
+                        ret.addReferredEntity(hdfsPathEntity);
                     } else {
                         //not a hive metastore hook
                         //it is running in the context of HiveServer2
-                        if (EXTERNAL_TABLE.equals(table.getTableType())) {
-                            AtlasEntity hdfsPathEntity = getPathEntity(table.getDataLocation(), ret);
-                            AtlasEntity processEntity  = getHiveProcessEntity(Collections.singletonList(hdfsPathEntity), Collections.singletonList(tblEntity));
+                        AtlasEntity hdfsPathEntity = getPathEntity(table.getDataLocation(), ret);
+                        AtlasEntity processEntity  = getHiveProcessEntity(Collections.singletonList(hdfsPathEntity), Collections.singletonList(tblEntity));
 
-                            ret.addEntity(processEntity);
-                            ret.addReferredEntity(hdfsPathEntity);
+                        ret.addEntity(processEntity);
+                        ret.addReferredEntity(hdfsPathEntity);
 
-                            AtlasEntity processExecution = getHiveProcessExecutionEntity(processEntity);
-                            ret.addEntity(processExecution);
-                        }
+                        AtlasEntity processExecution = getHiveProcessExecutionEntity(processEntity);
+                        ret.addEntity(processExecution);
                     }
                 }
 
