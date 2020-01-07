@@ -96,6 +96,10 @@ for i in "${HIVE_HOME}/lib/"*.jar; do
     HIVE_CP="${HIVE_CP}:$i"
 done
 
+for i in "${HIVE_HOME}/auxlib/"*.jar; do
+    HIVE_CP="${HIVE_CP}:$i"
+done
+
 #Add hadoop conf in classpath
 if [ ! -z "$HADOOP_CLASSPATH" ]; then
     HADOOP_CP=$HADOOP_CLASSPATH
