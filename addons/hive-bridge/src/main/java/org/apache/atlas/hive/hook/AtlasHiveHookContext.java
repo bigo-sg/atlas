@@ -78,7 +78,7 @@ public class AtlasHiveHookContext {
         this.knownObjects     = knownObjects;
         this.metastoreHook    = metastoreHook;
         this.metastoreEvent   = listenerEvent;
-        this.metastoreHandler = (listenerEvent != null) ? metastoreEvent.getIHMSHandler() : null;
+        this.metastoreHandler = (listenerEvent != null) ? metastoreEvent.getHandler() : null;
 
         init();
     }
@@ -250,10 +250,6 @@ public class AtlasHiveHookContext {
             switch (hiveOperation) {
                 case CREATEDATABASE:
                     databases.add(((CreateDatabaseEvent) metastoreEvent).getDatabase());
-                    break;
-                case ALTERDATABASE:
-                    databases.add(((AlterDatabaseEvent) metastoreEvent).getOldDatabase());
-                    databases.add(((AlterDatabaseEvent) metastoreEvent).getNewDatabase());
                     break;
                 case CREATETABLE:
                     tables.add(toTable(((CreateTableEvent) metastoreEvent).getTable()));

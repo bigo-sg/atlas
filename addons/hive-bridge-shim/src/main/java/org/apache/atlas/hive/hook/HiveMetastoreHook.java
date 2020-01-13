@@ -166,24 +166,24 @@ public class HiveMetastoreHook extends MetaStoreEventListener {
         }
     }
 
-    @Override
-    public void onAlterDatabase(AlterDatabaseEvent dbEvent) throws MetaException {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("==> HiveMetastoreHook.onAlterDatabase()");
-        }
-
-        try {
-            activatePluginClassLoader();
-
-            atlasMetastoreHookImpl.onAlterDatabase(dbEvent);
-        } finally {
-            deactivatePluginClassLoader();
-        }
-
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("<== HiveMetastoreHook.onAlterDatabase()");
-        }
-    }
+//    @Override
+//    public void onAlterDatabase(AlterDatabaseEvent dbEvent) throws MetaException {
+//        if (LOG.isDebugEnabled()) {
+//            LOG.debug("==> HiveMetastoreHook.onAlterDatabase()");
+//        }
+//
+//        try {
+//            activatePluginClassLoader();
+//
+//            atlasMetastoreHookImpl.onAlterDatabase(dbEvent);
+//        } finally {
+//            deactivatePluginClassLoader();
+//        }
+//
+//        if (LOG.isDebugEnabled()) {
+//            LOG.debug("<== HiveMetastoreHook.onAlterDatabase()");
+//        }
+//    }
 
     private void activatePluginClassLoader() {
         if (atlasPluginClassLoader != null) {

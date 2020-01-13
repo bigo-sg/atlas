@@ -24,7 +24,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.metastore.MetaStoreEventListener;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.events.*;
-import org.apache.hadoop.hive.metastore.utils.SecurityUtils;
 import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.ql.plan.HiveOperation;
 import org.apache.hadoop.hive.shims.Utils;
@@ -44,7 +43,6 @@ public class HiveMetastoreHookImpl extends MetaStoreEventListener {
 
     public HiveMetastoreHookImpl(Configuration config) {
         super(config);
-
         this.hiveHook = new HiveHook();
         this.hook     = new HiveMetastoreHook();
     }
@@ -59,13 +57,6 @@ public class HiveMetastoreHookImpl extends MetaStoreEventListener {
     @Override
     public void onDropDatabase(DropDatabaseEvent dbEvent) {
         HiveOperationContext context = new HiveOperationContext(DROPDATABASE, dbEvent);
-
-        hook.handleEvent(context);
-    }
-
-    @Override
-    public void onAlterDatabase(AlterDatabaseEvent dbEvent) {
-        HiveOperationContext context = new HiveOperationContext(ALTERDATABASE, dbEvent);
 
         hook.handleEvent(context);
     }
@@ -161,7 +152,7 @@ public class HiveMetastoreHookImpl extends MetaStoreEventListener {
                 }
 
                 if (event != null) {
-                    final UserGroupInformation ugi = SecurityUtils.getUGI() == null ? Utils.getUGI() : SecurityUtils.getUGI();
+                    final UserGroupInformation ugi = Utils.getUGI();
 
                     super.notifyEntities(event.getNotificationMessages(), ugi);
                 }
