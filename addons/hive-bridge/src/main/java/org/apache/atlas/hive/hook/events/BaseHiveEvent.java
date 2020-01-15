@@ -651,7 +651,8 @@ public abstract class BaseHiveEvent {
         String qualifiedName = getQualifiedName(inputs, outputs);
         if (context.isMetastoreHook()) {
             HiveOperation operation = context.getHiveOperation();
-            if (operation == HiveOperation.CREATETABLE || operation == HiveOperation.CREATETABLE_AS_SELECT) {
+            if (operation == HiveOperation.CREATETABLE || operation == HiveOperation.CREATETABLE_AS_SELECT
+                    || operation == HiveOperation.ALTERTABLE_PROPERTIES) {
                 AtlasEntity table = outputs.get(0);
                 long createTime = Long.valueOf((Long)table.getAttribute(ATTRIBUTE_CREATE_TIME));
                 qualifiedName =  (String) table.getAttribute(ATTRIBUTE_QUALIFIED_NAME) + QNAME_SEP_PROCESS + createTime;
