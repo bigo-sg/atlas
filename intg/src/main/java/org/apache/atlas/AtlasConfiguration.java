@@ -39,6 +39,8 @@ public enum AtlasConfiguration {
 
     NOTIFICATION_HOOK_TOPIC_NAME("atlas.notification.hook.topic.name", "ATLAS_HOOK"),
     NOTIFICATION_ENTITIES_TOPIC_NAME("atlas.notification.entities.topic.name", "ATLAS_ENTITIES"),
+    NOTIFICATION_MONITOR_TOPIC_NAME("atlas.notification.monitor.topic.name", "ATLAS_MONITOR"),
+    NOTIFICATION_BACKUP_TOPIC_NAME("atlas.notification.backup.topic.name", "ATLAS_BACKUP"),
 
     NOTIFICATION_HOOK_CONSUMER_TOPIC_NAMES("atlas.notification.hook.consumer.topic.names", "ATLAS_HOOK"), //  a comma separated list of topic names
     NOTIFICATION_ENTITIES_CONSUMER_TOPIC_NAMES("atlas.notification.entities.consumer.topic.names", "ATLAS_ENTITIES"), //  a comma separated list of topic names
