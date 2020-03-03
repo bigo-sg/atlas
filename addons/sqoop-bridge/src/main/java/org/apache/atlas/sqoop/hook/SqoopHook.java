@@ -242,7 +242,7 @@ public class SqoopHook extends SqoopJobDataPublisher {
 
     private static class AtlasHookImpl extends AtlasHook {
         public void sendNotification(HookNotification notification) {
-            super.notifyEntities(Collections.singletonList(notification), null);
+            super.notifyEntities(Collections.singletonList(notification), null, new HashMap<>());
         }
     }
 }

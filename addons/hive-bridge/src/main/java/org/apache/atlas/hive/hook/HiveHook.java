@@ -20,9 +20,13 @@ package org.apache.atlas.hive.hook;
 
 import org.apache.atlas.hive.hook.events.*;
 import org.apache.atlas.hook.AtlasHook;
+import org.apache.atlas.kafka.NotificationProvider;
 import org.apache.atlas.model.instance.AtlasEntity;
+import org.apache.atlas.model.notification.HookNotification;
+import org.apache.atlas.notification.NotificationInterface;
 import org.apache.atlas.utils.LruCache;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.CharEncoding;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.ql.hooks.ExecuteWithHookContext;
 import org.apache.hadoop.hive.ql.hooks.HookContext;
@@ -34,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -86,6 +91,7 @@ public class HiveHook extends AtlasHook implements ExecuteWithHookContext {
 
     private static HiveHookObjectNamesCache knownObjects = null;
     private static String hostName;
+    protected static NotificationInterface notificationInterface;
 
     static {
         for (HiveOperation hiveOperation : HiveOperation.values()) {
@@ -153,6 +159,7 @@ public class HiveHook extends AtlasHook implements ExecuteWithHookContext {
             LOG.warn("No hostname found. Setting the hostname to default value {}", DEFAULT_HOST_NAME, e);
             hostName = DEFAULT_HOST_NAME;
         }
+        notificationInterface     = NotificationProvider.get();
     }
 
 
@@ -165,6 +172,8 @@ public class HiveHook extends AtlasHook implements ExecuteWithHookContext {
             LOG.debug("==> HiveHook.run({})", hookContext.getOperationName());
         }
 
+        List<HookNotification> hookNotificationsMsg = new ArrayList<>();
+        Map<String, String> sqlInfo = new HashMap<>();
         try {
             HiveOperation        oper    = OPERATION_MAP.get(hookContext.getOperationName());
             AtlasHiveHookContext context = new AtlasHiveHookContext(this, oper, hookContext, getKnownObjects());
@@ -235,10 +244,16 @@ public class HiveHook extends AtlasHook implements ExecuteWithHookContext {
             if (event != null) {
                 final UserGroupInformation ugi = hookContext.getUgi() == null ? Utils.getUGI() : hookContext.getUgi();
 
-                super.notifyEntities(event.getNotificationMessages(), ugi);
+                sqlInfo.put("operation", hookContext.getOperationName());
+                sqlInfo.put("queryId", hookContext.getQueryPlan().getQueryId());
+                sqlInfo.put("queryStr", URLEncoder.encode(hookContext.getQueryPlan().getQueryStr(), CharEncoding.UTF_8));
+                hookNotificationsMsg = event.getNotificationMessages();
+                super.notifyEntities(hookNotificationsMsg, ugi, sqlInfo);
             }
         } catch (Throwable t) {
             LOG.error("HiveHook.run(): failed to process operation {}", hookContext.getOperationName(), t);
+            sqlInfo.put("failMessage", t.getMessage());
+            notificationInterface.send(NotificationInterface.NotificationType.MONITOR, hookNotificationsMsg, sqlInfo);
         }
 
         if (LOG.isDebugEnabled()) {

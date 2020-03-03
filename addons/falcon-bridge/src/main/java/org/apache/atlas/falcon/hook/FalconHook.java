@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -82,7 +83,7 @@ public class FalconHook extends AtlasHook implements FalconEventPublisher {
             break;
 
         }
-        notifyEntities(messages, null);
+        notifyEntities(messages, null, new HashMap<>());
     }
 
     private List<Referenceable> createEntities(FalconEvent event, String user) throws FalconException, URISyntaxException {

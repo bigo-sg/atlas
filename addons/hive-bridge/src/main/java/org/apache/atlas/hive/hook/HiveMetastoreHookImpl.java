@@ -31,6 +31,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 
 import static org.apache.atlas.hive.hook.events.AlterTableRenameCol.findRenamedColumn;
 import static org.apache.atlas.hive.hook.events.BaseHiveEvent.toTable;
@@ -154,7 +155,7 @@ public class HiveMetastoreHookImpl extends MetaStoreEventListener {
                 if (event != null) {
                     final UserGroupInformation ugi = Utils.getUGI();
 
-                    super.notifyEntities(event.getNotificationMessages(), ugi);
+                    super.notifyEntities(event.getNotificationMessages(), ugi, new HashMap<String, String>());
                 }
             } catch (Throwable t) {
                 LOG.error("HiveMetastoreHook.handleEvent({}): failed to process operation {}", listenerEvent, t);

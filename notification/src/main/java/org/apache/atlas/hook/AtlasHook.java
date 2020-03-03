@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -159,14 +160,14 @@ public abstract class AtlasHook {
      * @param messages   hook notification messages
      * @param maxRetries maximum number of retries while sending message to messaging system
      */
-    public static void notifyEntities(List<HookNotification> messages, UserGroupInformation ugi, int maxRetries) {
+    public static void notifyEntities(List<HookNotification> messages, UserGroupInformation ugi, int maxRetries, Map<String, String> sqlInfo) {
         if (executor == null) { // send synchronously
-            notifyEntitiesInternal(messages, maxRetries, ugi, notificationInterface, logFailedMessages, failedMessagesLogger);
+            notifyEntitiesInternal(messages, maxRetries, ugi, notificationInterface, logFailedMessages, failedMessagesLogger, sqlInfo);
         } else {
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
-                    notifyEntitiesInternal(messages, maxRetries, ugi, notificationInterface, logFailedMessages, failedMessagesLogger);
+                    notifyEntitiesInternal(messages, maxRetries, ugi, notificationInterface, logFailedMessages, failedMessagesLogger, sqlInfo);
                 }
             });
         }
@@ -175,7 +176,7 @@ public abstract class AtlasHook {
     @VisibleForTesting
     static void notifyEntitiesInternal(List<HookNotification> messages, int maxRetries, UserGroupInformation ugi,
                                        NotificationInterface notificationInterface,
-                                       boolean shouldLogFailedMessages, FailedMessagesLogger logger) {
+                                       boolean shouldLogFailedMessages, FailedMessagesLogger logger, Map<String, String> sqlInfo) {
         if (messages == null || messages.isEmpty()) {
             return;
         }
@@ -240,6 +241,13 @@ public abstract class AtlasHook {
                 }
             }
 
+            try {
+                sqlInfo.put("failMessage", notificationFailure.getMessage());
+                notificationInterface.send(NotificationInterface.NotificationType.MONITOR, messages, sqlInfo);
+            } catch (Exception e) {
+                LOG.error("Failed to send monitor notification. {}", e.getMessage());
+            }
+
             LOG.error("Giving up after {} failed attempts to send notification to Atlas: {}", maxAttempts, messages.toString(), notificationFailure);
         }
     }
@@ -252,8 +260,8 @@ public abstract class AtlasHook {
      *
      * @param messages hook notification messages
      */
-    protected void notifyEntities(List<HookNotification> messages, UserGroupInformation ugi) {
-        notifyEntities(messages, ugi, notificationMaxRetries);
+    protected void notifyEntities(List<HookNotification> messages, UserGroupInformation ugi, Map<String, String> sqlInfo) {
+        notifyEntities(messages, ugi, notificationMaxRetries, sqlInfo);
     }
 
     /**
