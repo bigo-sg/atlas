@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.security.auth.Subject;
 import javax.security.auth.kerberos.KerberosPrincipal;
+import java.util.HashMap;
 import java.util.HashSet;
 
 public class ImpalaLineageHook extends AtlasHook {
@@ -115,7 +116,7 @@ public class ImpalaLineageHook extends AtlasHook {
 
                 final UserGroupInformation ugi = getUgiFromUserName(lineageQuery.getUser());
 
-                super.notifyEntities(event.getNotificationMessages(), ugi);
+                super.notifyEntities(event.getNotificationMessages(), ugi, new HashMap<>());
             }
         } catch (Throwable t) {
 

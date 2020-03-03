@@ -21,6 +21,7 @@ import org.apache.atlas.notification.entity.EntityMessageDeserializer;
 import org.apache.atlas.notification.hook.HookMessageDeserializer;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface to the Atlas notification framework.
@@ -46,7 +47,10 @@ public interface NotificationInterface {
         HOOK(new HookMessageDeserializer()),
 
         // Notifications to entity change consumers.
-        ENTITIES(new EntityMessageDeserializer());
+        ENTITIES(new EntityMessageDeserializer()),
+
+        // Notification for monitor
+        MONITOR(new HookMessageDeserializer());
 
         private final AtlasNotificationMessageDeserializer deserializer;
 
@@ -97,6 +101,18 @@ public interface NotificationInterface {
      * @throws NotificationException if an error occurs while sending
      */
     <T> void send(NotificationType type, List<T> messages) throws NotificationException;
+
+    /**
+     * Send the given messages.
+     *
+     * @param type      the message type
+     * @param messages  the list of messages to send
+     * @param sqlInfo   the information of the sql
+     * @param <T>       the message type
+     *
+     * @throws NotificationException if an error occurs while sending
+     */
+    <T> void send(NotificationType type, List<T> messages, Map<String, String> sqlInfo) throws NotificationException;
 
     /**
      * Shutdown any notification producers and consumers associated with this interface instance.

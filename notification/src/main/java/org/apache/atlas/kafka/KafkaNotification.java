@@ -28,20 +28,13 @@ import org.apache.atlas.hook.AtlasHook;
 import org.apache.atlas.notification.AbstractNotification;
 import org.apache.atlas.notification.NotificationConsumer;
 import org.apache.atlas.notification.NotificationException;
-import org.apache.atlas.notification.NotificationInterface;
 import org.apache.atlas.service.Service;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationConverter;
 import org.apache.commons.lang.StringUtils;
-import org.apache.hadoop.security.alias.CredentialProvider;
-import org.apache.hadoop.security.alias.CredentialProviderFactory;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -52,8 +45,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Future;
 
-import static org.apache.atlas.security.SecurityProperties.TRUSTSTORE_PASSWORD_KEY;
 import static org.apache.atlas.security.SecurityProperties.TLS_ENABLED;
+import static org.apache.atlas.security.SecurityProperties.TRUSTSTORE_PASSWORD_KEY;
 import static org.apache.atlas.security.SecurityUtil.getPassword;
 
 /**
@@ -80,6 +73,7 @@ public class KafkaNotification extends AbstractNotification implements Service {
         {
             put(NotificationType.HOOK, ATLAS_HOOK_TOPIC);
             put(NotificationType.ENTITIES, ATLAS_ENTITIES_TOPIC);
+            put(NotificationType.MONITOR, ATLAS_MONITOR_TOPIC);
         }
     };
 
