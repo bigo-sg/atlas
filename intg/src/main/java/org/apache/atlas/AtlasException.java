@@ -20,7 +20,7 @@ package org.apache.atlas;
 /**
  * Base Exception class for Atlas API.
  */
-public class AtlasException extends Exception {
+public class AtlasException extends RuntimeException {
 
     public AtlasException() {
     }

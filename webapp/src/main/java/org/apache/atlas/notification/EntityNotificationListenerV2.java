@@ -17,9 +17,12 @@
  */
 package org.apache.atlas.notification;
 
+import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasErrorCode;
 import org.apache.atlas.RequestContext;
 import org.apache.atlas.exception.AtlasBaseException;
+import org.apache.atlas.hook.AtlasHook;
+import org.apache.atlas.kafka.KafkaNotification;
 import org.apache.atlas.listener.EntityChangeListenerV2;
 import org.apache.atlas.model.glossary.AtlasGlossaryTerm;
 import org.apache.atlas.model.instance.AtlasClassification;
@@ -190,6 +193,19 @@ public class EntityNotificationListenerV2 implements EntityChangeListenerV2 {
             try {
                 notificationSender.send(messages);
             } catch (NotificationException e) {
+                // sending failedMessages to kafka for backup
+                final List<String> failedMessages = e.getFailedMessages();
+                Configuration atlasProperties = ApplicationProperties.get();
+                KafkaNotification kafka = new KafkaNotification(atlasProperties);
+                int notificationMaxRetries = atlasProperties.getInt(AtlasHook.ATLAS_NOTIFICATION_MAX_RETRIES, 3);
+                for (int numAttempt = 1; numAttempt <= notificationMaxRetries; numAttempt++) {
+                    try {
+                        kafka.sendInternalForBackup(NotificationInterface.NotificationType.ENTITIES, failedMessages, "failed");
+                        break;
+                    } catch (Exception ex) {
+                        LOG.error("Failed to send backup entities message - attempt #{}; error={}; message={}", numAttempt, ex.getMessage(), messages.toString());
+                    }
+                }
                 throw new AtlasBaseException(AtlasErrorCode.ENTITY_NOTIFICATION_FAILED, e, operationType.name());
             }
         }

@@ -22,6 +22,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasConstants;
+import org.apache.atlas.kafka.KafkaNotification;
 import org.apache.atlas.kafka.NotificationProvider;
 import org.apache.atlas.model.notification.HookNotification;
 import org.apache.atlas.notification.NotificationException;
@@ -65,6 +66,7 @@ public abstract class AtlasHook {
 
     protected static Configuration         atlasProperties;
     protected static NotificationInterface notificationInterface;
+    protected static KafkaNotification kafka;
 
     private static final String               metadataNamespace;
     private static final int                  SHUTDOWN_HOOK_WAIT_TIME_MS = 3000;
@@ -78,6 +80,7 @@ public abstract class AtlasHook {
     static {
         try {
             atlasProperties = ApplicationProperties.get();
+            kafka = new KafkaNotification(atlasProperties);
         } catch (Exception e) {
             LOG.info("Failed to load application properties", e);
         }
@@ -224,6 +227,16 @@ public abstract class AtlasHook {
 
                 for (String msg : failedMessages) {
                     logger.log(msg);
+                }
+
+                // sending failedMessages to kafka for backup
+                for (int numAttempt = 1; numAttempt <= maxAttempts; numAttempt++) {
+                    try {
+                        kafka.sendInternalForBackup(NotificationInterface.NotificationType.HOOK, failedMessages, "failed");
+                        break;
+                    } catch (Exception e) {
+                        LOG.error("Failed to send backup hook message - attempt #{}; error={}; message={}", numAttempt, e.getMessage(), messages.toString());
+                    }
                 }
             }
 

@@ -41,13 +41,13 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Order;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
-import org.apache.hadoop.hive.metastore.utils.SecurityUtils;
 import org.apache.hadoop.hive.ql.hooks.*;
 import org.apache.hadoop.hive.ql.hooks.LineageInfo.BaseColumnInfo;
 import org.apache.hadoop.hive.ql.hooks.LineageInfo.DependencyKey;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.ql.plan.HiveOperation;
+import org.apache.hadoop.hive.shims.Utils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -651,7 +651,8 @@ public abstract class BaseHiveEvent {
         String qualifiedName = getQualifiedName(inputs, outputs);
         if (context.isMetastoreHook()) {
             HiveOperation operation = context.getHiveOperation();
-            if (operation == HiveOperation.CREATETABLE || operation == HiveOperation.CREATETABLE_AS_SELECT) {
+            if (operation == HiveOperation.CREATETABLE || operation == HiveOperation.CREATETABLE_AS_SELECT
+                    || operation == HiveOperation.ALTERTABLE_PROPERTIES) {
                 AtlasEntity table = outputs.get(0);
                 long createTime = Long.valueOf((Long)table.getAttribute(ATTRIBUTE_CREATE_TIME));
                 qualifiedName =  (String) table.getAttribute(ATTRIBUTE_QUALIFIED_NAME) + QNAME_SEP_PROCESS + createTime;
@@ -796,7 +797,7 @@ public abstract class BaseHiveEvent {
 
         if (context.isMetastoreHook()) {
             try {
-                ugi = SecurityUtils.getUGI();
+                ugi = Utils.getUGI();
             } catch (Exception e) {
                 //do nothing
             }

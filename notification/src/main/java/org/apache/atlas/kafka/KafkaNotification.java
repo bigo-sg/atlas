@@ -17,13 +17,18 @@
  */
 package org.apache.atlas.kafka;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasConfiguration;
 import org.apache.atlas.AtlasException;
+import org.apache.atlas.hook.AtlasHook;
 import org.apache.atlas.notification.AbstractNotification;
 import org.apache.atlas.notification.NotificationConsumer;
 import org.apache.atlas.notification.NotificationException;
+import org.apache.atlas.notification.NotificationInterface;
 import org.apache.atlas.service.Service;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationConverter;
@@ -62,6 +67,8 @@ public class KafkaNotification extends AbstractNotification implements Service {
     public    static final String PROPERTY_PREFIX            = "atlas.kafka";
     public    static final String ATLAS_HOOK_TOPIC           = AtlasConfiguration.NOTIFICATION_HOOK_TOPIC_NAME.getString();
     public    static final String ATLAS_ENTITIES_TOPIC       = AtlasConfiguration.NOTIFICATION_ENTITIES_TOPIC_NAME.getString();
+    public    static final String ATLAS_MONITOR_TOPIC       = AtlasConfiguration.NOTIFICATION_MONITOR_TOPIC_NAME.getString();
+    public    static final String ATLAS_BACKUP_TOPIC       = AtlasConfiguration.NOTIFICATION_BACKUP_TOPIC_NAME.getString();
     protected static final String CONSUMER_GROUP_ID_PROPERTY = "group.id";
 
     private   static final String[] ATLAS_HOOK_CONSUMER_TOPICS     = AtlasConfiguration.NOTIFICATION_HOOK_CONSUMER_TOPIC_NAMES.getStringArray(ATLAS_HOOK_TOPIC);
@@ -88,6 +95,7 @@ public class KafkaNotification extends AbstractNotification implements Service {
     private final Map<NotificationType, List<KafkaConsumer>> consumers = new HashMap<>();
     private final Map<NotificationType, KafkaProducer>       producers = new HashMap<>();
     private       String                                     consumerClosedErrorMsg;
+    private       int                                        notificationMaxRetries = 3;
 
     // ----- Constructors ----------------------------------------------------
 
@@ -103,12 +111,13 @@ public class KafkaNotification extends AbstractNotification implements Service {
         super(applicationProperties);
 
         LOG.info("==> KafkaNotification()");
-
+        Configuration atlasProperties = ApplicationProperties.get();
         Configuration kafkaConf = ApplicationProperties.getSubsetConfiguration(applicationProperties, PROPERTY_PREFIX);
 
         properties             = ConfigurationConverter.getProperties(kafkaConf);
         pollTimeOutMs          = kafkaConf.getLong("poll.timeout.ms", 1000);
         consumerClosedErrorMsg = kafkaConf.getString("error.message.consumer_closed", DEFAULT_CONSUMER_CLOSED_ERROR_MESSAGE);
+        notificationMaxRetries = atlasProperties.getInt(AtlasHook.ATLAS_NOTIFICATION_MAX_RETRIES, 3);
 
         //Override default configs
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
@@ -253,10 +262,16 @@ public class KafkaNotification extends AbstractNotification implements Service {
     }
 
     @VisibleForTesting
+    public void sendInternalForBackup(NotificationType notificationType, List<String> messages, String status) throws NotificationException {
+        KafkaProducer producer = getOrCreateProducer(notificationType);
+
+        sendInternalToProducerForBackup(producer, notificationType, messages, status);
+    }
+
+    @VisibleForTesting
     void sendInternalToProducer(Producer p, NotificationType notificationType, List<String> messages) throws NotificationException {
         String               topic           = PRODUCER_TOPIC_MAP.get(notificationType);
         List<MessageContext> messageContexts = new ArrayList<>();
-
         for (String message : messages) {
             ProducerRecord record = new ProducerRecord(topic, message);
 
@@ -271,13 +286,81 @@ public class KafkaNotification extends AbstractNotification implements Service {
 
         List<String> failedMessages       = new ArrayList<>();
         Exception    lastFailureException = null;
-
         for (MessageContext context : messageContexts) {
             try {
                 RecordMetadata response = context.getFuture().get();
 
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Sent message for topic - {}, partition - {}, offset - {}", response.topic(), response.partition(), response.offset());
+                }
+
+                // sending successMessages to kafka for backup
+                for (int numAttempt = 1; numAttempt <= notificationMaxRetries; numAttempt++) {
+                    try {
+                        sendInternalForBackup(notificationType, messages, "success");
+                        break;
+                    } catch (Exception e) {
+                        LOG.error("Failed to send backup message - attempt #{}; error={}; message={}", numAttempt, e.getMessage(), messages.toString());
+                    }
+                }
+            } catch (Exception e) {
+                lastFailureException = e;
+                failedMessages.add(context.getMessage());
+            }
+        }
+
+        if (lastFailureException != null) {
+            throw new NotificationException(lastFailureException, failedMessages);
+        }
+    }
+
+    @VisibleForTesting
+    void sendInternalToProducerForBackup(Producer p, NotificationType notificationType, List<String> messages, String status) throws NotificationException {
+        List<MessageContext> messageContexts = new ArrayList<>();
+
+        for (String message : messages) {
+            // add columns into message
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = null;
+            try {
+                root = mapper.readTree(message);
+                ObjectNode node = mapper.createObjectNode();
+                node.put("version", root.path("version").path("version").asText());
+                node.put("msgCompressionKind", root.path("msgCompressionKind").asText());
+                node.put("msgSplitIdx", root.path("msgSplitIdx").asInt());
+                node.put("msgSplitCount", root.path("msgSplitCount").asLong());
+                node.put("msgSourceIP", root.path("msgSourceIP").asText());
+                node.put("msgCreatedBy", root.path("msgCreatedBy").asText());
+                node.put("msgCreationTime", root.path("msgCreationTime").asLong());
+                node.put("type", String.valueOf(notificationType));
+                node.put("status", status);
+                node.put("content", message);
+
+                String finalMessage = node.toString();
+
+                ProducerRecord record = new ProducerRecord(ATLAS_BACKUP_TOPIC, finalMessage);
+
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Sending message for topic {}: {}", ATLAS_BACKUP_TOPIC, finalMessage);
+                }
+
+                Future future = p.send(record);
+
+                messageContexts.add(new MessageContext(future, finalMessage));
+            } catch (IOException e) {
+                throw new NotificationException(e, messages);
+            }
+        }
+
+        List<String> failedMessages       = new ArrayList<>();
+        Exception    lastFailureException = null;
+
+        for (MessageContext context : messageContexts) {
+            try {
+                RecordMetadata response = context.getFuture().get();
+
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Sent message for topic - {}, partition - {}, offset - {}", ATLAS_BACKUP_TOPIC, response.partition(), response.offset());
                 }
             } catch (Exception e) {
                 lastFailureException = e;
