@@ -247,13 +247,16 @@ public class HiveHook extends AtlasHook implements ExecuteWithHookContext {
                 sqlInfo.put("operation", hookContext.getOperationName());
                 sqlInfo.put("queryId", hookContext.getQueryPlan().getQueryId());
                 sqlInfo.put("queryStr", URLEncoder.encode(hookContext.getQueryPlan().getQueryStr(), CharEncoding.UTF_8));
+                sqlInfo.put("other", "producer");
                 hookNotificationsMsg = event.getNotificationMessages();
                 super.notifyEntities(hookNotificationsMsg, ugi, sqlInfo);
             }
         } catch (Throwable t) {
             LOG.error("HiveHook.run(): failed to process operation {}", hookContext.getOperationName(), t);
             sqlInfo.put("failMessage", t.getMessage());
+            LOG.info("Start to send failMessage(Producer) to Monitor topic!");
             notificationInterface.send(NotificationInterface.NotificationType.MONITOR, hookNotificationsMsg, sqlInfo);
+            LOG.debug("Finish to send failMessage(Producer) to Monitor topic!");
         }
 
         if (LOG.isDebugEnabled()) {

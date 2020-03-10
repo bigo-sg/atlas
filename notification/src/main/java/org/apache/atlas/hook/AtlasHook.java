@@ -242,8 +242,10 @@ public abstract class AtlasHook {
             }
 
             try {
+                LOG.info("Start to send failMessage(Producer) to Monitor topic!");
                 sqlInfo.put("failMessage", notificationFailure.getMessage());
                 notificationInterface.send(NotificationInterface.NotificationType.MONITOR, messages, sqlInfo);
+                LOG.debug("Finish to send failMessage(Producer) to Monitor topic!");
             } catch (Exception e) {
                 LOG.error("Failed to send monitor notification. {}", e.getMessage());
             }
