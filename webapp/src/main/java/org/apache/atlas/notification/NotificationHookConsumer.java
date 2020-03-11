@@ -762,12 +762,16 @@ public class NotificationHookConsumer implements Service, ActiveStateChangeHandl
                             if (failedMessages.size() >= failedMsgCacheSize) {
                                 recordFailedMessages();
                             }
-                            LOG.info("Start to send failMessage(Consumer) to Monitor topic!");
-                            Map<String, String> sqlInfo = new HashMap<>();
-                            sqlInfo.put("other", "Consumer");
-                            sqlInfo.put("failMessage", e.getMessage());
-                            notificationInterface.send(NotificationInterface.NotificationType.MONITOR, Arrays.asList(message), sqlInfo);
-                            LOG.debug("Finish to send failMessage(Consumer) to Monitor topic!");
+                            try {
+                                LOG.info("Start to send failMessage(Consumer) to Monitor topic!");
+                                Map<String, String> sqlInfo = new HashMap<>();
+                                sqlInfo.put("other", "Consumer");
+                                sqlInfo.put("failMessage", e.getMessage());
+                                notificationInterface.send(NotificationInterface.NotificationType.MONITOR, Arrays.asList(message), sqlInfo);
+                                LOG.debug("Finish to send failMessage(Consumer) to Monitor topic!");
+                            } catch (Exception ie) {
+                                LOG.error("send failMessage(Consumer) to Monitor topic failed");
+                            }
                             return;
                         } else {
                             LOG.warn("Error handling message", e);
