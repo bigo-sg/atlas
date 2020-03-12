@@ -24,6 +24,7 @@ import org.apache.atlas.*;
 import org.apache.atlas.exception.AtlasBaseException;
 import org.apache.atlas.ha.HAConfiguration;
 import org.apache.atlas.kafka.AtlasKafkaMessage;
+import org.apache.atlas.kafka.NotificationProvider;
 import org.apache.atlas.listener.ActiveStateChangeHandler;
 import org.apache.atlas.model.instance.AtlasEntity;
 import org.apache.atlas.model.instance.AtlasEntity.AtlasEntityWithExtInfo;
@@ -81,14 +82,7 @@ import org.springframework.stereotype.Component;
 
 import javax.inject.Inject;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -509,7 +503,7 @@ public class NotificationHookConsumer implements Service, ActiveStateChangeHandl
         private final AtomicBoolean                          shouldRun      = new AtomicBoolean(false);
         private final List<String>                           failedMessages = new ArrayList<>();
         private final AdaptiveWaiter                         adaptiveWaiter = new AdaptiveWaiter(minWaitDuration, maxWaitDuration, minWaitDuration);
-
+        protected NotificationInterface notificationInterface;
         @VisibleForTesting
         final FailedCommitOffsetRecorder failedCommitOffsetRecorder;
 
@@ -518,6 +512,7 @@ public class NotificationHookConsumer implements Service, ActiveStateChangeHandl
 
             this.consumer = consumer;
             failedCommitOffsetRecorder = new FailedCommitOffsetRecorder();
+            this.notificationInterface = NotificationProvider.get();
         }
 
         @Override
@@ -766,6 +761,16 @@ public class NotificationHookConsumer implements Service, ActiveStateChangeHandl
 
                             if (failedMessages.size() >= failedMsgCacheSize) {
                                 recordFailedMessages();
+                            }
+                            try {
+                                LOG.info("Start to send failMessage(Consumer) to Monitor topic!");
+                                Map<String, String> sqlInfo = new HashMap<>();
+                                sqlInfo.put("other", "Consumer");
+                                sqlInfo.put("failMessage", e.getMessage());
+                                notificationInterface.send(NotificationInterface.NotificationType.MONITOR, Arrays.asList(message), sqlInfo);
+                                LOG.debug("Finish to send failMessage(Consumer) to Monitor topic!");
+                            } catch (Exception ie) {
+                                LOG.error("send failMessage(Consumer) to Monitor topic failed");
                             }
                             return;
                         } else {

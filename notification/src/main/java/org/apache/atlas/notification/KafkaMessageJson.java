@@ -27,6 +27,8 @@ public class KafkaMessageJson {
   private String user;
   private String msgJson;
   private String failMessage;
+  private String other;
+  private String other2;
 
   private static final Logger LOG = LoggerFactory.getLogger(KafkaMessageJson.class);
 
@@ -36,12 +38,14 @@ public class KafkaMessageJson {
     this.queryStr = sqlInfo.get("queryStr");
     this.operation = sqlInfo.get("operation");
     this.failMessage = sqlInfo.get("failMessage");
-    executeAddress = address;
+    this.executeAddress = address;
     this.msgCreatedBy = msgCreatedBy;
-    createTime = (new Date()).getTime();
+    this.createTime = (new Date()).getTime();
     this.msgJson = msgJson;
-    user = ((HookNotification)message).getUser();
-    type = ((HookNotification)message).getType().toString();
+    this.user = ((HookNotification)message).getUser();
+    this.type = ((HookNotification)message).getType().toString();
+    this.other = sqlInfo.get("other");
+    this.other2 = "null";
   }
 
   @Override
@@ -59,6 +63,8 @@ public class KafkaMessageJson {
       objectNode.put("user", user);
       objectNode.put("msgJson", msgJson);
       objectNode.put("failMessage", failMessage);
+      objectNode.put("other", other);
+      objectNode.put("other2", other2);
 
     } catch (Exception e) {
       LOG.error("Failed to parse message to a json object. " + e);
