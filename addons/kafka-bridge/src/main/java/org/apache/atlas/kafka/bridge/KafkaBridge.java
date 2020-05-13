@@ -23,6 +23,9 @@ import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.atlas.ApplicationProperties;
 import org.apache.atlas.AtlasClientV2;
@@ -48,12 +51,11 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class KafkaBridge {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaBridge.class);
@@ -72,6 +74,9 @@ public class KafkaBridge {
     private static final String URI                        = "uri";
     private static final String CLUSTERNAME                = "clusterName";
     private static final String TOPIC                      = "topic";
+    private static final String TOPIC_OWNER                = "topicOwner";
+    private static final String KAKFKA_CLUSTER             = "kafkaCluster";
+    private static final String CONSUMER_GROUPS            = "consumerGroups";
 
     private static final String FORMAT_KAKFA_TOPIC_QUALIFIED_NAME       = "%s@%s";
     private static final String ZOOKEEPER_CONNECT                       = "atlas.kafka.zookeeper.connect";
@@ -80,11 +85,15 @@ public class KafkaBridge {
     private static final String DEFAULT_ZOOKEEPER_CONNECT               = "localhost:2181";
     private static final int    DEFAULT_ZOOKEEPER_SESSION_TIMEOUT_MS    = 10 * 1000;
     private static final int    DEFAULT_ZOOKEEPER_CONNECTION_TIMEOUT_MS = 10 * 1000;
+    private static final String KAFKA_BOOTSTRAP_SERVERS                 = "atlas.kafka.bootstrap.servers";
+
 
     private final List<String>  availableTopics;
     private final String        metadataNamespace;
     private final AtlasClientV2 atlasClientV2;
     private final ZkUtils       zkUtils;
+    private final AdminClient client;
+    public Map<String, String> ClusterIdToName = new HashMap<>();
 
 
     public static void main(String[] args) {
@@ -119,6 +128,7 @@ public class KafkaBridge {
             }
 
             KafkaBridge importer = new KafkaBridge(atlasConf, atlasClientV2);
+            importer.InitKafkaIdToName();
 
             if (StringUtils.isNotEmpty(fileToImport)) {
                 File f = new File(fileToImport);
@@ -142,6 +152,7 @@ public class KafkaBridge {
 
                 exitCode = EXIT_CODE_SUCCESS;
             }
+            importer.printMap();
         } catch(ParseException e) {
             LOG.error("Failed to parse arguments. Error: ", e.getMessage());
             printUsage();
@@ -168,6 +179,14 @@ public class KafkaBridge {
         this.metadataNamespace = getMetadataNamespace(atlasConf);
         this.zkUtils           = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect), JaasUtils.isZkSecurityEnabled());
         this.availableTopics   = scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics());
+
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getKafkaBootstrapServers(atlasConf));
+        client = AdminClient.create(props);
+    }
+
+    private String getKafkaBootstrapServers(Configuration config) {
+        return config.getString(KAFKA_BOOTSTRAP_SERVERS);
     }
 
     private String getMetadataNamespace(Configuration config) {
@@ -200,7 +219,8 @@ public class KafkaBridge {
 
     @VisibleForTesting
     AtlasEntityWithExtInfo createOrUpdateTopic(String topic) throws Exception {
-        String                 topicQualifiedName = getTopicQualifiedName(metadataNamespace, topic);
+        String clusterId                          = zkUtils.getClusterId().get().toLowerCase();
+        String                 topicQualifiedName = getTopicQualifiedName(metadataNamespace, clusterId + "#" + topic);
         AtlasEntityWithExtInfo topicEntity        = findTopicEntityInAtlas(topicQualifiedName);
 
         if (topicEntity == null) {
@@ -227,14 +247,19 @@ public class KafkaBridge {
     @VisibleForTesting
     AtlasEntity getTopicEntity(String topic, AtlasEntity topicEntity) {
         final AtlasEntity ret;
+        String topicOwner = null;
+        String clusterId = zkUtils.getClusterId().get().toLowerCase();
+        String qualifiedName = getTopicQualifiedName(metadataNamespace, clusterId + "#"+ topic);
 
         if (topicEntity == null) {
             ret = new AtlasEntity(KafkaDataTypes.KAFKA_TOPIC.getName());
         } else {
             ret = topicEntity;
+            topicOwner = topicEntity.getAttribute(TOPIC_OWNER) == null ?
+                    null : topicEntity.getAttribute(TOPIC_OWNER).toString();
+            qualifiedName = topicEntity.getAttribute(ATTRIBUTE_QUALIFIED_NAME) == null ?
+                    qualifiedName : topicEntity.getAttribute(ATTRIBUTE_QUALIFIED_NAME).toString();
         }
-
-        String qualifiedName = getTopicQualifiedName(metadataNamespace, topic);
 
         ret.setAttribute(ATTRIBUTE_QUALIFIED_NAME, qualifiedName);
         ret.setAttribute(CLUSTERNAME, metadataNamespace);
@@ -244,7 +269,51 @@ public class KafkaBridge {
         ret.setAttribute(URI, topic);
         ret.setAttribute(PARTITION_COUNT, (Integer) zkUtils.getTopicPartitionCount(topic).get());
 
+        if (topicOwner == null || topicOwner.isEmpty()) {
+            try {
+                UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
+                topicOwner = ugi.getShortUserName();
+            } catch (Exception e) {
+                LOG.error("Failed to get current user. " + e);
+            }
+        }
+        ret.setAttribute(TOPIC_OWNER, topicOwner);
+
+        ret.setAttribute(KAKFKA_CLUSTER, ClusterIdToName.getOrDefault(clusterId, "NotInInitCluster"));
+
+        String consumerGroups = String.join(",", getGroupsForTopic(topic));
+        ret.setAttribute(CONSUMER_GROUPS, consumerGroups);
+
         return ret;
+    }
+
+    private List<String> getGroupsForTopic(String topic) {
+        final List<String> filteredGroups = new ArrayList<>();
+        try {
+            List<String> allGroups = client.listConsumerGroups()
+                    .valid()
+                    .get(10, TimeUnit.SECONDS)
+                    .stream()
+                    .map(ConsumerGroupListing::groupId)
+                    .collect(Collectors.toList());
+
+            Map<String, ConsumerGroupDescription> allGroupDetails =
+                    client.describeConsumerGroups(allGroups).all().get(50, TimeUnit.SECONDS);
+
+            allGroupDetails.entrySet().forEach(entry -> {
+                String groupId = entry.getKey();
+                ConsumerGroupDescription description = entry.getValue();
+                boolean topicSubscribed = description.members().stream().map(MemberDescription::assignment)
+                        .map(MemberAssignment::topicPartitions)
+                        .map(tps -> tps.stream().map(TopicPartition::topic).collect(Collectors.toSet()))
+                        .anyMatch(tps -> tps.contains(topic));
+                if (topicSubscribed)
+                    filteredGroups.add(groupId);
+            });
+        } catch (Exception e) {
+            LOG.error("Failed to get consumer group. " + e);
+        }
+        return filteredGroups;
     }
 
     @VisibleForTesting
@@ -367,5 +436,33 @@ public class KafkaBridge {
             ret = DEFAULT_ZOOKEEPER_CONNECT;
         }
         return ret;
+    }
+
+    public void InitKafkaIdToName() {
+        Map<String, String> kafkaCluster = new HashMap<>();
+        kafkaCluster.put("123", "456");  // 脱敏
+
+        for (Map.Entry<String, String> entry : kafkaCluster.entrySet()) {
+            try {
+                Properties propsIn = new Properties();
+                propsIn.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, entry.getValue());
+                propsIn.put("retries", 2);
+                propsIn.put("request.timeout.ms", 50000);
+                AdminClient clientIn = AdminClient.create(propsIn);
+                String clusterId = clientIn.describeCluster().clusterId().get().toLowerCase();
+                ClusterIdToName.put(clusterId, entry.getKey());
+                clientIn.close();
+                System.out.println("Success to init: " + entry.getKey());
+            } catch (Exception e) {
+                System.out.println("Failed to init kafkaClusters. " + e);
+            }
+        }
+        printMap();
+    }
+
+    public void printMap() {
+        System.out.println("Success to init all clusters name: ");
+        System.out.println("Size: " + ClusterIdToName.size());
+        System.out.println(ClusterIdToName.toString());
     }
 }

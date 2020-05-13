@@ -8,6 +8,7 @@ import org.apache.atlas.model.notification.HookNotification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
@@ -19,7 +20,7 @@ public class KafkaMessageJson {
 
   private String queryId;
   private String queryStr;
-  private long createTime;
+  private String createTime;
   private String msgCreatedBy;
   private String executeAddress;
   private String type;
@@ -40,7 +41,7 @@ public class KafkaMessageJson {
     this.failMessage = sqlInfo.get("failMessage");
     this.executeAddress = address;
     this.msgCreatedBy = msgCreatedBy;
-    this.createTime = (new Date()).getTime();
+    this.createTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format((new Date()).getTime());
     this.msgJson = msgJson;
     this.user = ((HookNotification)message).getUser();
     this.type = ((HookNotification)message).getType().toString();
