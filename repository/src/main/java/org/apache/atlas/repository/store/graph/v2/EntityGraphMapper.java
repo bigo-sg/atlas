@@ -882,13 +882,19 @@ public class EntityGraphMapper {
 
         AtlasGraphUtilsV2.setEncodedProperty(ctx.getReferringVertex(), ctx.getVertexProperty(), ret);
 
+        LOG.error("### : set ctx.getVertexProperty() is {}, ret is {}", ctx.getVertexProperty(),  ret);
+
         String uniqPropName = ctx.getAttribute() != null ? ctx.getAttribute().getVertexUniquePropertyName() : null;
+
+        LOG.error("@@@ : get uniqPropName is {}", uniqPropName);
 
         if (uniqPropName != null) {
             if (context.isDeletedEntity(ctx.getReferringVertex()) || AtlasGraphUtilsV2.getState(ctx.getReferringVertex()) == DELETED) {
                 ctx.getReferringVertex().removeProperty(uniqPropName);
+                LOG.error("$$$ : removeProperty {}", uniqPropName);
             } else {
                 AtlasGraphUtilsV2.setEncodedProperty(ctx.getReferringVertex(), uniqPropName, ret);
+                LOG.error("%%% : set uniqPropName is {}, ret is {}", uniqPropName,  ret);
             }
         }
 

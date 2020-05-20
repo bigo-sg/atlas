@@ -39,6 +39,8 @@ import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 import org.janusgraph.core.SchemaViolationException;
 import org.janusgraph.core.JanusGraphElement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Janus implementation of AtlasElement.
@@ -47,6 +49,7 @@ import org.janusgraph.core.JanusGraphElement;
  * that is stored.
  */
 public class AtlasJanusElement<T extends Element> implements AtlasElement {
+  private static final Logger LOG = LoggerFactory.getLogger(AtlasJanusElement.class);
 
     private T element;
     protected AtlasJanusGraph graph;
@@ -115,10 +118,12 @@ public class AtlasJanusElement<T extends Element> implements AtlasElement {
                     removeProperty(propertyName);
                 }
             } else {
+                LOG.error("*** : propertyName is {}, old value is {}", propertyName, getWrappedElement().property(propertyName));
                 getWrappedElement().property(propertyName, value);
             }
         } catch(SchemaViolationException e) {
-            throw new AtlasSchemaViolationException(e);
+          LOG.error("*** : propertyName is {}, value is {}", propertyName, value);
+          throw new AtlasSchemaViolationException(e);
         }
     }
 
